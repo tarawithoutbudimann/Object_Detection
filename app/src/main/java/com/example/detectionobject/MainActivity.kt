@@ -1,24 +1,41 @@
 package com.example.detectionobject
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
+import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Handler
+import android.os.HandlerThread
+import android.view.Surface
 import android.view.TextureView
+import android.widget.ImageView
 import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
+    lateinit var imageView: ImageView
+    lateinit var bitmap: Bitmap
+    lateinit var imageView: ImageView
+    lateinit var cameraDevice: CameraDevice
+    lateinit var handler: Handler
     lateinit var cameraManager: CameraManager
     lateinit var textureView: TextureView
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         get_permission()
+
+        val handlerThread = HandlerThread("videoThread")
+        handlerThread.start()
+        handler = Handler(handlerThread.looper)
+
+        imageView = findViewById(R.id.imageView)
 
         textureView = findViewById(R.id.textureView)
         textureView.surfaceTextureListener = object :TextureView.SurfaceTextureListener{
@@ -35,6 +52,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onSurfaceTextureUpdated(p0: SurfaceTexture) {
+                bitmap = textureView.bitmap
 
             }
         }
@@ -42,11 +60,28 @@ class MainActivity : AppCompatActivity() {
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
     }
 
+    @SuppressLint("MissingPermission")
     fun open_camera(){
         cameraManager.openCamera(cameraManager.cameraIdList[0], object:CameraDevice.StateCallback(){
             override fun onOpened(p0: CameraDevice) {
+                cameraDevice = p0
+                var surfaceTexture = textureView.surfaceTexture
+                var surface = Surface(surfaceTexture)
 
-            }
+                var captureRequest = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+                captureRequest.addTarget(surface)
+
+                cameraDevice.createCaptureSession(listOf(surface), object:CameraCaptureSession.StateCallback(){
+                    override fun onConfigured(p0: CameraCaptureSession) {
+                        p0.setRepeatingRequest(captureRequest.build(), null, null)
+                    }
+
+                    override fun onConfigureFailed(p0: CameraCaptureSession) {
+
+                    }
+                }, handler)
+
+                }
 
             override fun onDisconnected(p0: CameraDevice) {
 
@@ -54,9 +89,8 @@ class MainActivity : AppCompatActivity() {
 
             override fun onError(p0: CameraDevice, p1: Int) {
 
-            }
-        })
-    }
+            }}, handler)}
+
     fun get_permission(){
         if(ContextCompat.checkSelfPermission(this,android.Manifest.permission.CAMERA)!= PackageManager.PERMISSION_GRANTED){
             requestPermissions(arrayOf(android.Manifest.permission.CAMERA), 101)
